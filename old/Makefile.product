@@ -1,0 +1,9 @@
+#		Make WorldWideWeb product
+#
+# 	First, set environment variable WWW_MACH to your
+#	machine architecure type.
+#
+#  Run this in WWW/$(PROD)/$(WWW_MACH)
+#
+include ../../Library/$(WWW_MACH)/Makefile.include
+include ../Implementation/CommonMakefile

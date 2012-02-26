@@ -1,0 +1,46 @@
+/**/
+/* trace i */
+parse arg host input
+input=translate(input,' ','+')
+If pos('?',input) > 0 THEN DO
+ parse var input '?' input
+'EXEC WHO :ANY 'input' (  OUTPUT STACK'
+'PIPE STACK | DROP 1 | STEM _.'
+ ko=0
+ Do k=1 to _.0
+   parse var _.k 4 surname 26 27 first 43 44  phone 48 64 div 67 44 rest
+   parse var first fir .
+   parse var div dv .
+   if phone='no p' Then phone=''
+   Else phone=';PH='phone
+   anchor='/WHO/S='space(surname,1,'+')';G='fir';OU='dv||phone';'
+   ko=ko+1;a.ko='<dt><a href='anchor'>'space(surname,1)', 'space(first,1)'</A>'
+   ko=ko+1;a.ko='<dd>'rest
+ End k; a.0=ko
+ queue '<isindex>'
+ queue '<title>'input' at CERN </title>'
+ queue '<dl compact>'
+'PIPE STEM A. | STACK'
+ queue '</dl>'
+END
+ELSE DO
+  parse var input '/WHO/S='surname';G='first';OU='div';PH='phone';'
+  If div='' Then Do; queue 'Wrong WHO syntax' input; Call X_ queued();end
+  if phone^='' then phone=':ph 'phone
+ 'EXEC WHO :su 'surname' :fi 'first' :div 'div phone ':all ( OUTPUT STACK'
+  If rc^=0  Then Do; queue 'Not found'; CALL X_ queued(); end
+ 'PIPE STACK | DROP 1 | SPECS 3-* 1 | STEM _.'
+  _.2='Email='_.2
+  queue '<title>'surname', 'first'</title>'
+  queue '<xmp>'
+ 'PIPE STEM _. | STACK'
+  queue '</xmp>'
+END
+CALL X_ queued()
+
+X_:  arg rc
+/*
+'PIPE STACK | SPECS /?/ 1 1-* 2  | CONS'
+*/
+Exit rc
+/* last line */

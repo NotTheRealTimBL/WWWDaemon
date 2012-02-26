@@ -1,0 +1,309 @@
+#	Common Makefile for WWW Servers and some Gateways
+#	-------------------------------------------------
+#
+# A Makefile in a subdirectory for the machine in question contains
+# the necessary definitions of directories etc.
+#
+#	(c) CERN 1990, 1991 -- see Copyright.html for conditions
+#
+# This file should be invariant between systems.
+#	DEPENDENCIES NOT COMPLETE @@
+#
+#	make		Compile and link the daemon (private version)
+#	make install	Copy it into the system (implies make)
+#	make update	Copy installed version into installed version
+#	make uninstall	Unlink installed version from the system
+#	make clean	Remove intermediate files
+#	make cleanall	Remove intremediate files and products
+#
+#	make httpd	as make
+#	make tigate	Make Techinfo gateway
+#
+#  NOTE: To make the WAIS gateway you need a ui.a library from the WAIS
+#  distribution.
+#	
+# Macros required to be defined already for make:
+#
+# CC		The C compiler
+# CFLAGS2	Flags for $(CC)
+# LFLAGS	Flags for ld
+# WWW		Root of WWW source tree
+#
+#______________________________________________________________________
+
+#  Rule file to be used by target daemon
+RULE_FILE = "/etc/httpd.conf"
+
+CMN = $(WWW)/Library/Implementation
+INC = $(WWW)/Library/Implementation
+SRC = $(WWW)/Daemon/Implementation
+OBJ = .
+OE = $(OBJ)/.created
+
+DOC = $(WWW)/Daemon/User/*.html $(WWW)/Daemon/*.html
+
+CFLAGS2 =  -I$(INC) -DDEBUG $(CFLAGS)
+
+PROD = httpd
+
+USELIBDIR = $(WTMP)/Library/$(WWW_MACH)
+OBJ = $(WTMP)/Daemon/$(WWW_MACH)
+
+OBJS = HTDaemonDIR.o HTRetrieve.o HTDirRead.o HTRules.o HTTCP.o  \
+	HTParse.o HTString.o
+FOBJS = HTDaemonNR.o FINDGate.o HTTCP.o HTParse.o HTString.o
+TIOBJS = HTDaemonNR.o TechInfoGate.o HTTCP.o HTParse.o HTString.o
+WOBJS = HTDaemonNR.o WAISGate.o HTTCP.o HTParse.o ParseWSRC.o HTString.o
+TWOBJS = test.o WAISGate.o HTTCP.o HTParse.o HTString.o
+
+# For the WAIS gateway, you need a WAIS release at the same directory
+# level as WWW or else set the pointer WAIS below to point to it.
+# Also, WBIN should be [linked to] the WAIS bin
+# directory for this machine.
+#
+
+WAIS = $(WWW)/../WAIS
+WIR = $(WAIS)/ir
+WBIN = bin
+
+# WAIS library for WAIS b3.
+WAISLIB = $(WBIN)/ui.a
+
+# WAIS library for WAIS-b4 (maybe not all needed)
+#WAISLIB =   $(WBIN)/client.a $(WBIN)/inv.a \
+#	$(WBIN)/wais.a $(WBIN)/libftw.a $(WBIN)/sig.a
+
+
+SPECIFIC = $(SRC)/Makefile.decstation	\
+	$(SRC)/Makefile.next
+
+SOURCES = $(SRC)/HTDaemon.c	$(SRC)/HTRetrieve.c	\
+	$(SRC)/HTDirRead.c	$(SRC)/HTDirRead.h	\
+	$(SRC)/HTRules.c	$(SRC)/HTRules.h	\
+	$(SRC)/WAISGate.c	$(SRC)/ParseWSRC.c	\
+	$(SRC)/ParseWSRC.h	$(SRC)/wsrc2html.c	\
+	$(SRC)/DCLServer.c	$(SRC)/VMServer.c	\
+	$(SRC)/VMSHelpGate.c	$(SRC)/TechInfoGate.c	\
+	$(SRC)/CommonMakefile	$(SRC)/Makefile		\
+	$(SRC)/install.csh	$(SRC)/Version.make	\
+	$(SRC)/test.c		$(SPECIFIC)
+
+
+include $(ABS)$(SRC)/Version.make
+
+#		Hypertext File server
+
+$(PROD) : $(OBJS)
+	$(CC) -o $(PROD)_$(VD)  $(OBJS) $(LFLAGS)
+	-rm $(PROD)
+	ln -s $(PROD)_$(VD) $(PROD)
+
+HTRetrieve.o : $(SRC)/HTRetrieve.c $(INC)/HTUtils.h $(INC)/tcp.h \
+	$(INC)/HTFile.h
+	$(CC) -c $(CFLAGS2) -DRULES -DRULE_FILE=\"$(RULE_FILE)\" $(SRC)/HTRetrieve.c
+
+HTDirRead.o : $(SRC)/HTDirRead.c $(INC)/HTUtils.h $(INC)/tcp.h \
+	$(INC)/HTFile.h
+	$(CC) -c $(CFLAGS2) -DRULES -DRULE_FILE=\"$(RULE_FILE)\" $(SRC)/HTDirRead.c
+
+
+$(USELIBDIR)/libwww.a :
+	@echo You must get and make the WWWLibrary product first!
+	(cd $(WWW)/Library/$(WWW_MACH) && make)
+
+lib :
+	(cd $(WWW)/Library/$(WWW_MACH) && make)
+
+# Things we check on all platforms and export binaries
+
+all : httpd tigate
+	echo "httpd and tigate daemons up to date"
+
+
+# 		FIND gateway - test only (has to run on VM!)
+
+FINDGate : $(FOBJS)
+	$(CC) -o FINDGate $(FOBJS) $(LFLAGS)
+FINDGate.o : $(SRC)/FINDGate.c $(INC)/HTUtils.h $(INC)/tcp.h
+	$(CC) -c $(CFLAGS2) $(SRC)/FINDGate.c
+
+#		Techinfo Gateway
+
+tigate : $(TIOBJS)
+	$(CC) $(LFLAGS) -o tigate $(TIOBJS)
+
+TechInfoGate.o : $(SRC)/TechInfoGate.c
+	$(CC) $(CFLAGS2) -c -o $@ $(SRC)/TechInfoGate.c
+
+# 		WAIS Gateway
+
+WAISGate : $(WOBJS) $(WAISLIB)
+	$(CC) -o WAISGate $(WOBJS) $(WAISLIB) $(LFLAGS)
+WAISGate.o : $(SRC)/WAISGate.c $(INC)/HTUtils.h $(INC)/tcp.h
+	$(CC) -c $(CFLAGS2) -I$(WIR) $(SRC)/WAISGate.c
+wsrc2html.o : $(SRC)/wsrc2html.c $(INC)/HTUtils.h
+	$(CC) -c $(CFLAGS2) $(SRC)/wsrc2html.c
+wsrc2html : wsrc2html.o 
+	$(CC) -o wsrc2html .o $(CFLAGS2)
+	
+ParseWSRC.o : $(SRC)/ParseWSRC.c $(INC)/HTUtils.h
+	$(CC) -c -o ParseWSRC.o $(CFLAGS2) $(SRC)/ParseWSRC.c
+
+#	Stand-alone WAIS source file parser:
+
+ParseWSRC_Prog.o : $(SRC)/ParseWSRC.c $(INC)/HTUtils.h
+	$(CC) -c -o ParseWSRC_Prog.o $(CFLAGS2) -DTEST $(SRC)/ParseWSRC.c
+ParseWSRC : ParseWSRC_Prog.o 
+	$(CC) -o ParseWSRC ParseWSRC_Prog.o $(CFLAGS2)
+
+#	Test program for WAIS gateway
+	
+tw : $(TWOBJS) $(WBIN)/ui.a
+	$(CC) -o tw $(TWOBJS) $(WBIN)/ui.a -lNeXT_s -lsys_s
+
+# 		Common Code
+
+test.o : $(SRC)/test.c $(INC)/HTUtils.h $(INC)/tcp.h $(INC)/HTTCP.h
+	$(CC) -c $(CFLAGS2) -DRULES -DRULE_FILE=\"$(RULE_FILE)\" $(SRC)/test.c
+HTDaemon.o : $(SRC)/HTDaemon.c $(INC)/HTUtils.h $(INC)/tcp.h $(INC)/HTTCP.h
+	$(CC) -c $(CFLAGS2) -DRULES -DRULE_FILE=\"$(RULE_FILE)\" $(SRC)/HTDaemon.c
+HTDaemonNR.o : $(SRC)/HTDaemon.c $(INC)/HTUtils.h $(INC)/tcp.h $(INC)/HTTCP.h
+	$(CC) -c $(CFLAGS2) -o HTDaemonNR.o $(SRC)/HTDaemon.c
+HTDaemonDIR.o : $(SRC)/HTDaemon.c $(INC)/HTUtils.h $(INC)/tcp.h \
+	$(INC)/HTTCP.h $(SRC)/HTDirRead.h
+	$(CC) -c $(CFLAGS2) -o HTDaemonDIR.o -DRULES \
+	-DRULE_FILE=\"$(RULE_FILE)\" -DDIR_OPTIONS \
+		$(SRC)/HTDaemon.c
+HTTCP.o : $(CMN)/HTTCP.c $(INC)/tcp.h $(INC)/HTUtils.h
+	$(CC) -c $(CFLAGS2) $(CMN)/HTTCP.c
+HTString.o : $(CMN)/HTString.c $(INC)/tcp.h $(INC)/HTUtils.h
+	$(CC) -c $(CFLAGS2) $(CMN)/HTString.c
+HTFTP.o : $(CMN)/HTFTP.c $(INC)/tcp.h $(INC)/HTUtils.h
+	$(CC) -c $(CFLAGS2) $(CMN)/HTFTP.c
+HTFile.o : $(CMN)/HTFile.c $(INC)/tcp.h $(INC)/HTUtils.h
+	$(CC) -c $(CFLAGS2) $(CMN)/HTFile.c
+HTRules.o : $(SRC)/HTRules.c $(INC)/HTUtils.h $(INC)/HTParse.h
+	$(CC) -c $(CFLAGS2) -DRULES -DRULE_FILE=\"$(RULE_FILE)\" $(SRC)/HTRules.c
+HTParse.o : $(CMN)/HTParse.c $(INC)/HTUtils.h $(INC)/HTParse.h
+	$(CC) -c $(CFLAGS2) $(CMN)/HTParse.c
+	
+
+#_________________________________________________________________________
+#	Install the server
+
+install :	$(PROD)
+	csh $(SRC)/install.csh
+
+#	Link system to the binary and documentation in this tree
+
+link : Works/$(PROD)
+	ln -s `pwd`/$(PROD) $(BINDIR)/$(PROD)
+	- mkdir /usr/local
+	- mkdir /usr/local/lib
+	ln -s $(DEFAULTS) /usr/local/lib/WWW
+
+uninstall :
+	rm $(BINDIR)/$(PROD)
+	rm -r /usr/local/lib/WWW
+
+#	Clean up everything generatable except final products
+#	Including obj directory UNLESS there is anything else in it
+clean :
+	- rm $(OBJ)/.created $(OBJ)/*.o
+	- rmdir $(OBJ)
+
+#	Clean up everything generatable including final products
+
+cleanall : clean
+	- rm $(PROD)
+
+#	Binary release
+#
+#	Must be done on anonymous FTP server!
+#
+#  This makefile does not knw how to make $(PROD)_$(VD) so that trying
+#  to make binay or asis on a weird machine doesn't try to build $(PROD)!
+
+binary : $(PROD)_$(VD)
+	-mkdir /pub/www/bin/$(WWW_MACH)
+	cp $(PROD)_$(VD) /pub/www/bin/$(WWW_MACH)/$(PROD)_$(VD)
+
+#	ASIS installation
+#	-----------------
+#	Can only happen on an allocated ASIS development machine and
+#	with uid of the controlling user for the project.
+#
+asis : /asis/share/usr.local/lib/WWW/default.html \
+	/asis/specific/$(ASIS_MACH)/usr.local/bin/$(PROD)
+	touch asis
+	echo ASIS distribution is now up-to-date.
+
+/asis/specific/$(ASIS_MACH)/usr.local/bin/$(PROD) : $(PROD)_$(VD)
+	cp $(PROD)_$(VD) /asis/specific/$(ASIS_MACH)/usr.local/bin/$(PROD)_$(VD)
+	rm -f /asis/specific/$(ASIS_MACH)/usr.local/bin/$(PROD)
+	ln -s $(PROD)_$(VD) \
+		/asis/specific/$(ASIS_MACH)/usr.local/bin/$(PROD)
+
+/asis/share/usr.local/lib/WWW/default.html : $(DEFAULTS)/cern.html
+	- mkdir /asis/share/usr.local/lib/WWW
+	cp $(DEFAULTS)/*.html /asis/share/usr.local/lib/WWW
+	cp $(DEFAULTS)/cern.html /asis/share/usr.local/lib/WWW/default.html
+	cp $(DEFAULTS)/default.html /asis/share/usr.local/lib/WWW/top.html
+
+#	CERNLIB installation
+#	--------------------
+#	Assuming the cernlib-style directory structure
+#	Warning: Not suitable for machine-shared file structure.
+#
+cernlib :	$(PROD)
+	- mkdir $(CERNLIBBIN)
+	cp $(PROD) $(CERNLIBBIN)
+
+
+#_________________________________________________________________________	
+
+
+#	Check directory exists
+$(OE) :
+	-mkdir $(WTMP)
+	-mkdir $(WTMP)/Daemon
+	-mkdir $(WTMP)/Daemon/$(WWW_MACH)
+	touch $(OE)
+
+
+#_________________________________________________________________
+# For W3 Administrative use only:
+
+
+#		W3 Source + documentation release
+#		---------------------------------
+
+distribute :  /pub/www/README.txt /pub/www/Copyright.txt
+	(cd $(WWW)/.. && WWW=WWW ABS=`pwd`/ make $(MFLAGS) \
+		-f WWW/Daemon/Implementation/CommonMakefile \
+		/pub/www/src/WWWDaemon_$(VD).tar.Z)
+	@ echo Distribution of Daemon version $(VC) up to date.
+
+# THIS MUST BE BUILT FROM THE DIRECTORY ABOVE WWW ! USE distribute above!
+/pub/www/src/WWWDaemon_$(VD).tar.Z : $(SOURCES)
+	tar cvf /pub/www/src/WWWDaemon_$(VD).tar \
+	    $(SOURCES)  $(DOC)
+	compress /pub/www/src/WWWDaemon_$(VD).tar
+
+#________________________________________________________________________
+#		Hypertext supplied in text format
+#		---------------------------------
+
+$(WWW)/README.txt : $(WWW)/../README.html
+	www -n -p66 http://info.cern.ch/hypertext/README.html \
+		> $(WWW)/README.txt
+/pub/www/README.txt : $(WWW)/README.txt
+	cp $(WWW)/README.txt /pub/www/README.txt
+
+$(WWW)/Copyright.txt : $(WWW)/../Copyright.html
+	www -n -p66 http://info.cern.ch/hypertext/Copyright.html \
+		> $(WWW)/Copyright.txt
+/pub/www/Copyright.txt : $(WWW)/Copyright.txt
+	cp $? $@
+
+

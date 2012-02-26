@@ -1,0 +1,49 @@
+#! /bin/csh
+#  			W3 server for emdir
+#
+set request = ( `head -1 | sed -e 's/\?/ /g'` )
+if ("$request[1]" != "GET" ) then
+    echo 599 unknown request "$request[1]"
+    exit
+endif
+
+if ($#request > 2 ) then
+    set words = (`echo $request[3] | sed -e 's/+/ /g' `)
+    echo "<HEAD>"
+    echo "<TITLE>$words in EMDIR</TITLE>"
+    echo "<ISINDEX>"
+    echo "</HEAD><BODY><XMP>"
+    emdir $words
+    echo "</XMP></BODY>"
+else
+    cat << EOF
+<HEAD><Title>Electron Mail Directory</title>
+<ISINDEX>
+</HEAD>
+<BODY>
+<h1>EMDIR</h1>
+This is the CERN EMDIR Electronic Mail Directory.
+Your search words should be in order:
+<pre>
+	name [firstname [div [expt [institute [mailadd ]]]]]
+
+</pre>
+A percent sign (%) may be used to replace any missing word,
+or as a wild card at either end of, or within, any of the words.
+A blank within a parameter must be replaced by %.
+<dl>
+<dt>name<dd>is the name of the person whose entry you wish to see
+<dt>firstname<dd>is the first name of the person
+<dt>div<dd>is the CERN Division of the person
+<dt>expt<dd>is the experiment in which the person is involved (ALEPH,
+L3,..)
+<dt>institute<dd>is the abbreviation of the institute to which the person
+belongs (e.g. CERN, PISA), (Please consult the Grey Book
+'Experiments at CERN' for valid abbreviations.)
+<dt>mailadd<dd>is the electronic mail address of the person
+</dl>
+The results will be summarised if many hits are found, more detailed if
+only a few.
+</BODY>
+EOF
+endif

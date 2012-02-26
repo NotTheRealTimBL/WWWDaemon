@@ -1,0 +1,362 @@
+5,7c5,9
+< **	   Sep 91	Made from earlier daemon files. TBL
+< **	26 Feb 92	Bug fixes for Multinet. JFG
+< **	27 Feb 92	No limit on command buffer size.
+---
+> **	   Sep 91  TBL 	Made from earlier daemon files.
+> **	26 Feb 92  JFG	Bug fixes for Multinet.
+> **       8 Jun 92  TBL  Bug fix: Perform multiple reads in case we don't get
+> **                      the whole command first read.
+> **	25 Jun 92  JFG  Added DECNET option through TCP socket emulation.
+9c11
+< /* (c) CERN WorldWideWeb project 1990,91. See Copyright.html for details */
+---
+> /* (c) CERN WorldWideWeb project 1990-1992. See Copyright.html for details */
+11,13d12
+< #define VERSION 	"v0.2"
+< #define COMMAND_SIZE	1024		/* Arbitrary chunk size */
+< #define COMMAND_LIMIT	30000		/* Limit in case mean/stupid client */
+49,55c48,56
+< PRIVATE struct sockaddr_in  soc_address;  /* See netinet/in.h 			*/
+< PRIVATE int		    soc_addrlen;
+< PRIVATE int		    master_soc;	  /* inet socket number to listen on	*/
+< PRIVATE int		    com_soc;	  /* inet socket number to read on	*/
+< PRIVATE fd_set		    open_sockets; /* Mask of channels which are active */
+< PRIVATE int		    num_sockets;  /* Number of sockets to scan */
+< PRIVATE BOOLEAN		    dynamic_allocation;	/* Search for port? */
+---
+> PRIVATE SockA	soc_address;
+> PRIVATE int	soc_addrlen;
+> PRIVATE int	master_soc;	/* inet socket number to listen on */
+> PRIVATE int	com_soc;	/* inet socket number to read on */
+> #ifdef SELECT
+> PRIVATE fd_set	open_sockets;	/* Mask of channels which are active */
+> PRIVATE int	num_sockets;	/* Number of sockets to scan */
+> #endif
+> PRIVATE BOOLEAN	dynamic_allocation;	/* Search for port? */
+73c74
+< PRIVATE char * strip(char * s)
+---
+> PRIVATE char * strip ARGS1(char *, s)
+93c94
+< PUBLIC int HTWriteASCII(int soc, char * s)
+---
+> PUBLIC int HTWriteASCII ARGS2(int, soc, char *, s)
+121c122
+< int do_bind(const char * tsap)
+---
+> int do_bind ARGS1(CONST char *, tsap)
+123c124
+< 
+---
+> #ifdef SELECT
+126c127,128
+<     
+---
+> #endif
+> 
+167c169
+< 	register struct sockaddr_in* sin = &soc_address;
+---
+> 	register SockA * sin = &soc_address;
+173a176,179
+> #ifdef DECNET
+> 	sin->sdn_family = AF_DECnet;	    /* Family = DECnet, host order  */
+> 	sin->sdn_objnum = 0;                /* Default: new object number, */
+> #else  /* Internet */
+175a182
+> #endif
+191a199,202
+> #ifdef DECNET
+> 		sin->sdn_objnum = (unsigned char) HTCardinal(
+> 					    &status, &q, (unsigned int)65535);
+> #else
+195c206
+< 		
+---
+> #endif
+198c209
+< 		break;	    /* Exit for loop before we skip the zero */
+---
+> 		break;	    /* Exit from loop before we skip the zero */
+202a214,222
+> #ifdef DECNET  /* Empty address (don't care about the command) */
+> 	sin->sdn_add.a_addr[0] = 0;
+> 	sin->sdn_add.a_addr[1] = 0;
+> 	CTRACE(tfp, 
+> 	    "Daemon: Parsed address as port %d, DECnet %d.%d\n",
+> 		    (int) sin->sdn_objnum,
+> 		    (int) sin->sdn_add.a_addr[0],
+> 		    (int) sin->sdn_add.a_addr[1] ) ;
+> #else
+217d236
+< 
+225c244
+< 
+---
+> #endif
+234a254,256
+> #ifdef DECNET
+> 	master_soc = socket(AF_DECnet, SOCK_STREAM, 0);
+> #else
+236c258
+< 	  
+---
+> #endif
+243a266
+> #ifndef DECNET  /* irrelevant: no inetd */
+258c281,283
+< 	} else {					/* Port was specified */
+---
+> 	} else
+> #endif
+> 	  {					/* Port was specified */
+260c285
+< 		     (struct sockaddr*)&soc_address,	/* Case to generic address */
+---
+> 		     (struct sockaddr*)&soc_address,	/* Cast to generic address */
+267a293
+> #ifdef SELECT
+270c296
+< 
+---
+> #endif
+290,293c316
+< PRIVATE char * command_buffer = 0;
+< PRIVATE int command_buffer_size = 0;
+< 
+< PUBLIC int HTHandle(int soc)
+---
+> PUBLIC int HTHandle ARGS1(int, soc)
+295c318,320
+< #define MAX_LINES 10000			/* Maximum number of lines returned */
+---
+> #define COMMAND_SIZE	 2048   /* @@@@ WAIS queries can be big! */
+> #define MINIMUM_READ      256   /* Minimum size of buffer left before we reallocate */
+> #define ALLOCATION_UNIT  2048   /* Amount extra we add on each time */
+296a322
+>     char *command;      /* To hold command read from client */
+302,317c328,335
+<     int length;		/* length of command read so far */
+<     char * read_pointer;
+<     char * read_limit;
+<     
+<     if (!command_buffer) {
+<         command_buffer = (char *)malloc(command_buffer_size=COMMAND_SIZE);
+<     }
+<     read_pointer = command_buffer;
+<     read_limit = command_buffer + command_buffer_size;
+<     for (length = 0; *(length-1)>=32; ){   
+< 	char * p;
+< 	status = NETREAD(soc, read_pointer, read_limit - read_pointer);
+< 	if (status<=0) {
+< 	    if (TRACE) printf(
+< 	        "NETREAD returned %d, errno=%d\n", status, errno);
+< 	    return status;	/* Return and close socket */
+---
+>        
+>     for (;;) {
+>         int allocated = COMMAND_SIZE;
+> 	int bytes_read = 0;
+> 	command = (char *)malloc(allocated+1);
+> 	if (!command) {
+> 	    fprintf(stderr, "Daemon: insufficient memory!\n");
+> 	    exit(-5);
+319,339c337,344
+< 	for (p=read_pointer; p<(read_pointer+status); p++)
+< 		if (*p == 10) break;	/* Found LF */
+< 	}
+< 	
+< 	if (*p == 10) {
+< 	    while (*p==13 || *p==10) *p-- = 0;	/* Strip CR LF */
+< 	    break;/* Got command */
+< 	}
+< 	
+< 	read_pointer = read_pointer + status;/* Move on */
+< 	
+< 	if (read_pointer == read_limit) {	/* Strectch buffer  */
+< 	    command_buffer = (char *)realloc(command_buffer,
+< 	    	command_buffer_size = command_buffer_size + COMMAND_SIZE;
+< 	    if (TRACE) fprintf(stderr,
+< 	    	"HTDaemon: Command buffer now %d bytes\n",
+< 		 command_buffer_size);
+< 	    if (command_buffer_size > COMMAND_LIMIT) {
+< 		if (TRACE) fprintf(stderr,
+< 		    "HTDaemon: Command buffer TOO BIG - ABORT!\n\n");
+< 		return -1;
+---
+>         for(;;) {     /* Loop over reads on the same socket */
+> 	    if (allocated - bytes_read < MINIMUM_READ) {
+> 	        allocated = allocated + ALLOCATION_UNIT;
+> 		command = (char *)realloc(command, allocated+1);
+> 		if (!command) {
+> 		  fprintf(stderr, "Daemon: No memory to reallocate command buffer!!\n");
+> 		  exit(-6);
+> 		}
+340a346,367
+>     	    status = NETREAD(soc, command + bytes_read, allocated - bytes_read);
+> 	    if (TRACE) fprintf(stderr, "Daemon: net read returned %d, errno=%d\n", status, errno);
+> 	    if (status<=0) {
+> 	        free(command);
+> 	        return status;	/* Return and close file */
+> 	    }
+> 	    {
+> 	      char * p = command + bytes_read;
+> 	      for(p=command + bytes_read; p < command + bytes_read + status; p++) {
+> 		if (!*p) {
+> 		  free(command);
+> 		  return -1;    /* No LF */
+> 		}
+> 	        if (*p==10) {
+> 		  break;
+> 		}
+> 	      }
+> 	      bytes_read = bytes_read + status;
+> 	      if (p == command+bytes_read)/* No terminators yet */
+> 		continue;
+> 	    }
+> 	    break;/* Terminator found */
+342,344c369
+<     }
+<     /* command_buffer now is zero-terminated ACSII string */
+<     
+---
+> 	command[bytes_read]=0;	/* terminate the string */
+346,350c371,376
+<     {
+< 	char * p;
+< 	for (p=command_buffer; *p; p++) {
+< 	    *p = FROMASCII(*p);
+< 	    if (*p == '\n') *p = ' ';
+---
+> 	{
+> 	    char * p;
+> 	    for (p=command; *p; p++) {
+> 		*p = FROMASCII(*p);
+> 		if (*p == '\n') *p = ' ';
+> 	    }
+352d377
+<     }
+357,374c382,388
+<     if (logfile) {
+< 	time(&theTime);
+< 	fprintf(logfile, "%24.24s %s %s",
+< 	    ctime(&theTime), HTClientHost, command_buffer);
+< 	fflush(logfile);	/* Actually update it on disk */
+< 	if (TRACE) printf("Log: %24.24s %s %s",
+< 	    ctime(&theTime), HTClientHost, command_buffer);
+<     }
+<     
+<     arg=strchr(command_buffer,' ');
+<     if (arg) {
+< 	*arg++ = 0;				/* Terminate command 	*/
+< 	arg = strip(arg);			/* Strip space 		*/
+< 
+< 	if (0==strcmp("GET", command_buffer)) {	/* Get a file 		*/
+< 	    keywords=strchr(arg, '?');
+< 	    if (keywords) *keywords++=0;	/* Split into two */
+< 	    return HTRetrieve(arg, keywords, soc);
+---
+> 	if (logfile) {
+> 	    time(&theTime);
+> 	    fprintf(logfile, "%24.24s %s %s",
+> 		ctime(&theTime), HTClientHost, command);
+> 	    fflush(logfile);	/* Actually update it on disk */
+> 	    if (TRACE) printf("Log: %24.24s %s %s",
+> 		ctime(&theTime), HTClientHost, command);
+375a390,395
+> 	
+> 	arg=strchr(command,' ');
+> 	if (arg) {
+> 	    int stat;
+> 	    *arg++ = 0;				/* Terminate command 	*/
+> 	    arg = strip(arg);			/* Strip space 		*/
+377c397,403
+<     } /* Space found supplied */
+---
+> 	    if (0==strcmp("GET", command)) {	/* Get a file 		*/
+> 		keywords=strchr(arg, '?');
+> 		if (keywords) *keywords++=0;	/* Split into two */
+> 	        stat =  HTRetrieve(arg, keywords, soc);
+> 		free(command);
+> 		return stat;
+> 	    }
+379,386c405,416
+<     HTWriteASCII(soc, "<h1>HTTP Server v1.02</h1><h2>Test response</h2>\n");
+<     HTWriteASCII(soc, "\n\nThe (unrecognised) command used was `");
+<     HTWriteASCII(soc, command_buffer);
+<     HTWriteASCII(soc, "'.\n\n");
+<     
+<     if (TRACE) printf("Return test string written back'\n");
+<     return 0;		/* End of file - please close socket */
+<     
+---
+> 	} /* Space found supplied */
+> 
+> 	HTWriteASCII(soc, "<h1>HTTP Server v1.02</h1><h2>Test response</h2>\n");
+> 	HTWriteASCII(soc, "\n\nThe (unrecognised) command used was `");
+> 	HTWriteASCII(soc, command);
+> 	HTWriteASCII(soc, "'.\n\n");
+> 	
+> 	if (TRACE) printf("Return test string written back'\n");
+> 	free(command);
+> 	return 0;		/* End of file - please close socket */
+>     } /* for */
+> 
+391,392c421,422
+< /*      Main server loop				server_loop()
+< **	----------------
+---
+> /*      Handle incoming messages				server_loop()
+> **	-------------------------
+495c525,527
+< 	    if (com_soc<0) { /* No slaves: must accept */
+---
+> /*	    if (com_soc<0) { /* No slaves: must accept */
+> 	      SockA peer_soc;
+> 	      int peer_len = sizeof (peer_soc);
+497a530,532
+> #ifdef DECNET
+> 		    tcp_status = accept(master_soc, &peer_soc, &peer_len);
+> #else  /* For which machine is this ??? rsoc is undeclared, what's mdp ? */
+500a536
+> #endif
+505c541
+< 	    } /* end if no slaves */
+---
+> /*	    } /* end if no slaves */
+515c551
+< 	    struct sockaddr_in addr;
+---
+> 	    SockA addr;
+516a553,555
+> #ifdef DECNET
+> 	    /* TBD */
+> #else
+519a559
+> #endif
+521c561
+< 	
+---
+> 
+540a581
+> #ifdef SELECT
+541a583
+> #endif
+550a593
+> #ifdef SELECT
+551a595
+> #endif
+568c612,614
+< int main(int argc, char*argv[])
+---
+> int main ARGS2 (
+> 	int,	argc,
+> 	char**,	argv)
+609,611c655,656
+< /* Remove because an inet daemon process gets started every request.
+< 		fprintf(logfile, "\nhttpd: HTTP Daemon %s started.\n",
+< 			 VERSION);
+---
+> /* Removed because an inet daemon process gets started every request.
+> 		fprintf(logfile, "\nhttpd: HTTP Daemon %s started.\n", VD);

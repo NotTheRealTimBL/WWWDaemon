@@ -1,0 +1,220 @@
+
+
+This is the script:
+
+ Bugs:  Numeric character references where necessary needed for < and > and &
+	PLAINTEXT used
+
+#!/usr/local/bin/perl
+#
+#  variables
+#
+$INDEX_FILE="Index";
+$PUBLIC_DOC="/pub/doc";
+$README_DIR="$PUBLIC_DOC/READMES";
+$AsisMgrDir="/usr/local/etc/asis";
+#$AsisMgrDir=".";
+$EXEC_DIR="/usr/local/bin";
+#
+#
+
+$buffer=<STDIN>;
+if ($buffer =~ /^\s*[Gg][Ee][Tt]\s+(\/[\w\+\-\.]*)(\/[\w\/\.\+\-]+)?[\s\t\n]*/) {
+    $cmd=$1;
+    $file=$2;
+}
+else {
+    print "<H1>ASIS HTTP Server Error Message</H1>\n//asis01.cern.ch ASIS www server: Unknown HTTP Command - $buffer\n\n";
+    exit;
+}
+if ($cmd =~ /^[\/\?]$/) {
+    open(DOC,"$AsisMgrDir/www-welcome");
+    print <DOC>;
+    close(DOC);
+}
+elsif ($cmd =~ /\/[Ff][Ii][Ll][Ee]/) {
+    $file=substr($file,1);
+    print "<TITLE>ASIS File Server. File $file </TITLE>\n";
+    print "<H1> $file </H1>\n<P>\n<DL>\n";
+    print "<plaintext>\n";
+    open(DOC,"$AsisMgrDir/$file");
+    print <DOC>;
+    close(DOC);
+}
+elsif ($cmd =~ /\/[Mm][Aa][Nn]/) {
+    $file=substr($file,1);
+    print "<TITLE>ASIS Man Server. Man pages for $file </TITLE>\n";
+    print "<H1> man $file </H1>\n<P>\n<DL>\n";
+    print "<plaintext>\n";
+    print `MANPATH=/usr/local/man PATH=/bin:/usr/bin/:/usr/ucb man $file`;
+}
+elsif ($cmd =~ /\/[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ss]/) {
+    if ($file eq "") {
+	@prods=`ls $AsisMgrDir/*.list`;
+	print "<TITLE>ASIS Documentation Server. List of ASIS product families </TITLE>\n";
+	print "<H1> ASIS product families </H1>\n<P>\n<DL>\n";
+	foreach $i (@prods) {
+	    $_=$i;
+	    next if /^$/;
+	    chop;
+	    next if /^$/;
+	    s#^$AsisMgrDir\/(.*)\.list$#$1#;
+	    print "<DT><A HREF=\"$cmd/$_.list\"> $_</A>";
+	}
+	print "</DL>\n";
+	exit;
+    }
+    if ($file =~ /^.*\.list$/) {
+	@prods=`cat $AsisMgrDir/$file`;
+	$_=$file;s#^(.*)\.list$#$1#;
+	print "<TITLE>ASIS Documentation Server. List of $_ family</TITLE>\n";
+	print "<H1> List of ASIS products in the $_ family</H1>\n<P>\n<DL>\n";
+	foreach $i (@prods) {
+	    $_=$i;
+	    next if /^$/;
+	    chop;
+	    next if /^$/;
+	    s#^\s*([\w-\+\.]+)\s+([\w\+-\@\$\!\.]+)\s*(\w+)$#<DT><A HREF=\"$cmd/$1\">$1</A>\n<DD> Maintainer: $2  Support Level: $3\n#;
+	    print;
+	}
+	print "</DL>\n";
+	exit;
+    }
+    $file=substr($file,1);
+    open(DOC,"$PUBLIC_DOC/Index");
+    while (<DOC>) {
+	chop;
+	next if /^$/;
+	next if /^#$/;
+	if ($_ =~ /^#\s*Package\s*$file\s*.*/) {
+		print "<H1> Package $file </H1>\n<P>\nCommands are:\n<DL>\n<P>\n";
+		last;
+	}
+    }
+    while (<DOC>) {
+	next if /^[\s-]*\n$/;
+	next if /^#\n$/;
+	next if /^\n$/;
+	last if /^#\s*Package.*/;
+	s#\s*(.*)#$1#;
+	s#^(.*)-\s*\n$#$1#;
+	if ($_ =~ /No more info available, may be internal/) {
+	  s#^\s*([\w-+]+)\s+-\s+(.*)#<DT> $1\n<DD> $2#;
+	}
+	else {
+          s#^\s*([\w-+]+)\s*-\s*(.*)#<DT> <A HREF=\"/man/$1\">$1</A>\n<DD> $2#;
+	}
+	print;
+    }
+    close(DOC);
+    print "</DL>\n";
+}
+elsif ($cmd =~ /\/[Ii][Nn][Ff][Oo]/) {
+    $i=rindex($file,"/");
+    $upfile=substr($file,0,$i);
+    $_=$file; s#/# #g;$node=$_;
+    $upnode=substr($node,0,$i);
+    if ($upnode =~ /^\s*$/) {$upnode="dir";}
+    open(DOC,"$EXEC_DIR/info -o - $node 2>&1 |");
+    while (<DOC>) {
+        if (($_ =~ /^.*There is no menu entry for .*$/) ||
+            ($_ =~ /^.*Sorry, unable to find the node .*$/)) {
+	    print "<TITLE>ASIS Info Server Error Message</TITLE>\n<plaintext>\n//asis01.cern.ch ASIS Info server: Info on $node is not avalable\n\n";
+            exit;
+        }
+	if ($_ =~ /^File[:\s\t]+[\w\+\-\.\(\)]+[,\s\t]*Node[:\s\t]+[\w\+\-\.\(\)]+[,\s\t]*(Up[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Previous[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Next[:\s\t]+[\w\+\-\.\(\)]+)?(Up[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Previous[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Next[:\s\t]+[\w\+\-\.\(\)]+)?(Up[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Previous[:\s\t]+[\w\+\-\.\(\)]+)?[,\s\t]*(Next[:\s\t]+[\w\+\-\.\(\)]+)?.*$/) {
+	    print "<TITLE>ASIS Info Server. Path: $node</TITLE>\n";
+	    print "<H1>Info path: $node</H1>\n";
+	    print "-+-";
+	    if ($1 ne "") {
+		print " <A HREF=\"$cmd$upfile\">Up: $upnode</A> -+-";
+	    }
+	    if ($4 ne "") {
+		print " <A HREF=\"$cmd$upfile\">Up: $upnode</A> -+-";
+	    }	
+	    if ($7 ne "") {
+		print " <A HREF=\"$cmd$upfile\">Up: $upnode</A> -+-";
+	    }	
+	    if ($2 ne "") {
+		$_=$2;s#Previous[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$2</A> -+-";
+	    }
+	    if ($5 ne "") {
+		$_=$5;s#Previous[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$5</A> -+-";
+	    }	
+	    if ($8 ne "") {
+		$_=$8;s#Previous[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$8</A> -+-";
+	    }	
+	    if ($3 ne "") {
+		$_=$3;s#Next[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$3</A> -+-";
+	    }	
+	    if ($6 ne "") {
+		$_=$6;s#Next[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$6</A> -+-";
+	    }	
+	    if ($9 ne "") {
+		$_=$9;s#Next[:\s\t]+##;
+		print " <A HREF=\"$cmd$file/$_\">$9</A> -+-";
+	    }	
+	    print "\n";
+	    print " <P>\n";
+	    last;
+	}
+	print $_;
+    }
+    print " <P>\n";
+    while(<DOC>) {
+	if ($_ =~ /^\* [Mm][Ee][Nn][Uu]:/) {
+	    print; 
+	    print "<DL>\n"; 
+	    next;
+	}
+	elsif ($_ =~ /^\* .*/) {
+	    s#^\* ([\w\(\)-\.\+]*)[:\s]*(.*)$#<DT> <A HREF=\"$cmd$file/$1\"> $1 </A>\n<DD> $2#; 
+            print $_;
+	}
+        elsif ($_ =~ /^\s*\n$/) {
+	    print "<P>\n";
+	}
+        elsif ($_ =~ /^\s+.*$/) {
+	    s#^\s+(.*)#$1#;	    
+	    print $_;
+	}
+	else {
+	    print $_;
+	}
+    }
+    print "</DL>\n";
+    close(DOC);
+}
+elsif ($cmd =~ /\/[Ii][Nn][Ss][Tt][Aa][Ll][Ll]/) {
+    print "<TITLE>ASIS Documentation Server Error Message</TITLE>\n<plaintext>\n//asis01.cern.ch ASIS HTTP server: Local Command $buffer not implemented\n\n";
+}
+elsif ($cmd =~ /\/[Mm][Aa][Ii][Nn][Tt][Aa][Ii][Nn]/) {
+    print "<TITLE>ASIS Documentation Server Error Message</TITLE>\n<plaintext>\n//asis01.cern.ch ASIS HTTP server: Local Command $buffer not implemented\n\n";
+}
+else {
+    print "<TITLE>ASIS HTTP Server Error Message</TITLE>\n<plaintext>\n//asis01.cern.ch ASIS www server: Unknown Local Command - $buffer\n\n";
+}
+
+
+  ************************************************************************
+  *  Philippe Defert: Computing and Networks Division                    *
+  *                   CERN,  European Laboratory for Particle Physics    *
+  ************************************************************************
+  *  Earth mail:                     |          E*mail:                  *
+  *     CERN / CN / CO               |      defert@dxcern.cern.ch        *
+  *  CH*1211 Geneve 23. Switzerland. |      defert@dxcern.UUCP           *
+  *  Voice:                          |      defert@dxcern.bitnet         *
+  *     + 41 22 7673923              |      psi%02284681140551::defert   *
+  ************************************************************************
+  *                                              | \                     *
+  *      D`es que le vent soufflera,             |   \                   *
+  *      Je repartira.                          /|     \                 *
+  *      D`es que les vents tourneront,        / |       \               *
+  *      Nous nous en allerons.               /__|_________\             * 
+  *                                           \____________/             *  
+  ************************************************************************

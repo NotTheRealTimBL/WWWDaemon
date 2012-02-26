@@ -1,0 +1,36 @@
+<TITLE>W3 project - assorted design notes</TITLE>
+<NEXTID 12>
+<H1>Performance of FIND server 29 May 91</H1>Conditions: Loops over   XFIND COPY TAPE CMS with SHOW DATE.  Normally
+loaded machines (around 14:00) running VMS and accessing CRNVMC with
+HTTP/TCP/IP.
+<XMP>			Loops/min	Loops/sec
+One process on one machine at a time:
+	VXCRNA		27		.45 Hz
+	ONLINE		27		.45 Hz
+
+One process on each machine, all at the same time:
+	VXCRNA		25		.4 Hz
+	ONLINE		20
+	VSOC28		18
+	VSOC06		16
+	Total		79		1.3 Hz
+
+Thee spawned processes each machine, all the same time (12 in all):	
+	VXCRNA		49		.4 Hz
+
+	ONLINE		21
+
+	VSOC28		20
+
+	VSOC06		19
+
+	Total		109		1.8 Hz
+
+</XMP>The last test apparently brought the VM TCP interface close to running
+out of buffers and losing telnet connections. This is with a version
+of the daemon which incorrectly gives precedence to incoming new connections
+over messages on existing connections, and so the number of connections
+at any one time may have been larger than necessary. The test demonstrates
+that the server (if not the IBM) behaves well under overload. The
+throughput figure is sufficient for our <A NAME=11 HREF=../Talks/FIND_problems.html>estimates</A> of peak load on
+a running system.</A>
